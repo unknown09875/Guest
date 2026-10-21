@@ -157,34 +157,6 @@
         </button>
 
         <div class="task__body" id="{{ task.id }}-body">
-          {% for block in task.blocks %}
-            {% if block.type == 'p' %}
-              <p>{{ block.html|safe }}</p>
-            {% elif block.type == 'code' %}
-              <div class="codeblock">
-                <div class="codeblock__bar">
-                  <span class="codeblock__lang">{{ block.lang|default('bash') }}</span>
-                  {% if block.spoiler %}<span class="codeblock__spoiler">spoiler - try it yourself first</span>{% endif %}
-                  <button class="copy-btn" type="button" data-copy-block>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>
-                    Copy
-                  </button>
-                </div>
-                <pre><code>{{ block.text }}</code></pre>
-              </div>
-            {% elif block.type == 'note' %}
-              <div class="callout callout--note">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg>
-                <div>
-                  {% if block.title %}<p class="callout__title">{{ block.title|safe }}</p>{% endif %}
-                  <p>{{ block.html|safe }}</p>
-                </div>
-              </div>
-            {% elif block.type == 'list' %}
-              <ul class="room-list">{% for item in block['items'] %}<li>{{ item|safe }}</li>{% endfor %}</ul>
-            {% endif %}
-          {% endfor %}
-
           <div class="questions">
             {% for q in task.questions %}
             <div class="question {% if q.id in solved %}is-solved{% endif %}" data-question="{{ q.id }}">
@@ -224,9 +196,9 @@
               </div>
 
               <div class="question__meta">
-                <button class="link-btn" type="button" data-hint="{{ q.id }}" {% if not q.hint %}hidden{% endif %}>
+                <button class="link-btn" type="button" data-hint="{{ q.id }}" aria-expanded="false" {% if not q.hint or q.id in solved %}hidden{% endif %}>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg>
-                  Show hint
+                  <span data-hint-label="{{ q.id }}">Show hint</span>
                 </button>
                 <span class="question__feedback" data-feedback="{{ q.id }}" role="status" aria-live="polite"></span>
               </div>
@@ -236,6 +208,52 @@
                 <p data-hint-text="{{ q.id }}"></p>
               </div>
             </div>
+            {% endfor %}
+          </div>
+
+          <div class="instructions-cta">
+            <button class="btn btn--instr" type="button" data-instructions-toggle="{{ task.id }}" aria-expanded="false" aria-controls="{{ task.id }}-instructions">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 10h16M4 15h10"/><path d="M17 17l3 3-3 3"/></svg>
+              <span data-instructions-label="{{ task.id }}">Show instructions</span>
+            </button>
+            <p class="instructions-cta__note">New to this topic or stuck on a question? Open the walkthrough for this task.</p>
+          </div>
+
+          <div class="instructions" id="{{ task.id }}-instructions" data-instructions="{{ task.id }}" role="region" aria-label="Task {{ task.number }} instructions" hidden>
+            <div class="instructions__head">
+              <span class="instructions__label">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 10h16M4 15h10"/></svg>
+                Instructions
+              </span>
+              <button class="link-btn" type="button" data-instructions-close="{{ task.id }}">Hide</button>
+            </div>
+
+            {% for block in task.blocks %}
+              {% if block.type == 'p' %}
+                <p>{{ block.html|safe }}</p>
+              {% elif block.type == 'code' %}
+                <div class="codeblock">
+                  <div class="codeblock__bar">
+                    <span class="codeblock__lang">{{ block.lang|default('bash') }}</span>
+                    {% if block.spoiler %}<span class="codeblock__spoiler">spoiler - try it yourself first</span>{% endif %}
+                    <button class="copy-btn" type="button" data-copy-block>
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>
+                      Copy
+                    </button>
+                  </div>
+                  <pre><code>{{ block.text }}</code></pre>
+                </div>
+              {% elif block.type == 'note' %}
+                <div class="callout callout--note">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg>
+                  <div>
+                    {% if block.title %}<p class="callout__title">{{ block.title|safe }}</p>{% endif %}
+                    <p>{{ block.html|safe }}</p>
+                  </div>
+                </div>
+              {% elif block.type == 'list' %}
+                <ul class="room-list">{% for item in block['items'] %}<li>{{ item|safe }}</li>{% endfor %}</ul>
+              {% endif %}
             {% endfor %}
           </div>
         </div>

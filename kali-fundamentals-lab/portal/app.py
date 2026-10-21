@@ -5,10 +5,9 @@ from __future__ import annotations
 import os
 import re
 
-from flask import Flask, jsonify, render_template, request, session
-
 import content
 import flags
+from flask import Flask, jsonify, render_template, request, session
 
 app = Flask(__name__)
 app.config.update(
@@ -26,6 +25,15 @@ class TargetUnavailable(RuntimeError):
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
+def as_text(value) -> str:
+    """Coerce any JSON value to a safe string (never raise on odd payloads)."""
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    return str(value)
+
+
 def normalise_answer(raw: str) -> str:
     """Collapse whitespace and strip the things a copy/paste usually drags in."""
     text = (raw or "").replace("\r", " ").replace("\n", " ").replace("\t", " ")
@@ -35,8 +43,7 @@ def normalise_answer(raw: str) -> str:
         text = text[2:].strip()
     if text.lower().startswith("sudo "):
         text = text[5:].strip()
-    text = re.sub(r"\s*;\s*$", "", text)
-    return text
+    return re.sub(r"\s*;\s*$", "", text)
 
 
 def solved_set() -> set[str]:
@@ -209,9 +216,11 @@ def api_progress():
 
 @app.post("/api/answer")
 def api_answer():
-    payload = request.get_json(silent=True) or {}
-    question_id = payload.get("question_id", "")
-    answer = payload.get("answer", "")
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    question_id = as_text(payload.get("question_id"))
+    answer = as_text(payload.get("answer"))
 
     question = content.QUESTION_INDEX.get(question_id)
     if question is None:
@@ -253,8 +262,10 @@ def api_answer():
 
 @app.post("/api/hint")
 def api_hint():
-    payload = request.get_json(silent=True) or {}
-    question = content.QUESTION_INDEX.get(payload.get("question_id", ""))
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    question = content.QUESTION_INDEX.get(as_text(payload.get("question_id")))
     if question is None:
         return jsonify({"ok": False, "error": "unknown question"}), 404
     return jsonify({"ok": True, "hint": question.get("hint", "")})
@@ -263,19 +274,20 @@ def api_hint():
 @app.post("/api/submit-flag")
 def api_submit_flag():
     """The room-level Submit Flag box - accepts any flag on the target."""
-    payload = request.get_json(silent=True) or {}
-    submitted = normalise_answer(payload.get("flag", ""))
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    submitted = normalise_answer(as_text(payload.get("flag")))
 
     if not submitted:
         return jsonify({"ok": True, "correct": False, "message": "Enter a flag first."})
 
-    target_status = flags.docker_status()
-    problems = []
+    read_errors = []
     for slot in content.FLAG_SLOTS:
         try:
             expected = flags.get_flag(slot["path"])
-        except Exception as exc:  # noqa: BLE001
-            problems.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 - target not running
+            read_errors.append(str(exc))
             continue
 
         if submitted == expected:
@@ -292,17 +304,17 @@ def api_submit_flag():
                 }
             )
 
-    if not target_status.get("ok"):
+    if len(read_errors) == len(content.FLAG_SLOTS):
         return jsonify(
             {
                 "ok": True,
                 "correct": False,
-                "message": "Cannot reach the target container right now. Is linux-target running?",
-                "target": target_status,
+                "target_down": True,
+                "message": "Cannot read the flags from linux-target. Is the container running?",
+                "target": flags.docker_status(),
             }
         )
 
-    _ = problems
     return jsonify(
         {
             "ok": True,

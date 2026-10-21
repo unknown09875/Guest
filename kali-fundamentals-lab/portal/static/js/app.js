@@ -5,6 +5,7 @@
   var LAB = window.LAB || { solved: [], total: 0, flagsTotal: 0 };
   var solved = new Set(LAB.solved);
   var flagSlots = Array.prototype.slice.call(document.querySelectorAll("[data-flag-slot]"));
+  var completionAnnounced = !!(LAB.total && LAB.solved.length >= LAB.total);
   var toastEl = document.getElementById("toast");
   var toastTimer = null;
 
@@ -27,8 +28,16 @@
       body: payload ? JSON.stringify(payload) : undefined,
       credentials: "same-origin"
     }).then(function (res) {
-      return res.json().then(function (data) {
-        if (!res.ok) throw new Error(data.error || "Request failed");
+      return res.text().then(function (body) {
+        var data;
+        try {
+          data = body ? JSON.parse(body) : {};
+        } catch (err) {
+          data = {};
+        }
+        if (!res.ok) {
+          throw new Error(data.error || "Request failed (" + res.status + ")");
+        }
         return data;
       });
     });
@@ -107,7 +116,8 @@
 
     renderFlags(progress.captured_flags || []);
 
-    if (progress.complete) {
+    if (progress.complete && !completionAnnounced) {
+      completionAnnounced = true;
       toast("Room complete - all questions answered. Nice work!", "ok");
     }
   }
@@ -200,6 +210,63 @@
       });
   }
 
+  /* ------------------------------------------------------------- hints */
+  function setHintOpen(button, open) {
+    var id = button.getAttribute("data-hint");
+    var box = $('[data-hint-box="' + id + '"]');
+    if (!box) return;
+    box.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    var label = button.querySelector("[data-hint-label]");
+    if (label) label.textContent = open ? "Hide hint" : "Show hint";
+  }
+
+  function toggleHint(button) {
+    var id = button.getAttribute("data-hint");
+    var box = $('[data-hint-box="' + id + '"]');
+    var text = $('[data-hint-text="' + id + '"]');
+    if (!box || !text) return;
+
+    if (!box.hidden) {
+      setHintOpen(button, false);
+      return;
+    }
+    if (text.textContent) {
+      setHintOpen(button, true);
+      return;
+    }
+
+    button.disabled = true;
+    api("/api/hint", { question_id: id })
+      .then(function (data) {
+        text.textContent = data.hint || "No hint for this question.";
+        setHintOpen(button, true);
+      })
+      .catch(function () {
+        toast("Could not load hint", "bad");
+      })
+      .then(function () { button.disabled = false; });
+  }
+
+  /* ------------------------------------------------------ instructions */
+  // Instructions are always collapsed when the page loads: nothing is revealed
+  // unless the user clicks "Show instructions" for that task.
+  function setInstructionsOpen(taskId, open) {
+    var panel = $('[data-instructions="' + taskId + '"]');
+    if (!panel) return;
+    panel.hidden = !open;
+
+    $$('[data-instructions-toggle="' + taskId + '"]').forEach(function (button) {
+      button.setAttribute("aria-expanded", open ? "true" : "false");
+      var label = button.querySelector("[data-instructions-label]");
+      if (label) label.textContent = open ? "Hide instructions" : "Show instructions";
+    });
+  }
+
+  $$("[data-instructions-toggle]").forEach(function (button) {
+    setInstructionsOpen(button.getAttribute("data-instructions-toggle"), false);
+  });
+
   document.addEventListener("click", function (event) {
     var submit = event.target.closest("[data-submit]");
     if (submit) {
@@ -207,29 +274,23 @@
       return;
     }
 
+    var instrToggle = event.target.closest("[data-instructions-toggle]");
+    if (instrToggle) {
+      var openTask = instrToggle.getAttribute("data-instructions-toggle");
+      var panel = $('[data-instructions="' + openTask + '"]');
+      if (panel) setInstructionsOpen(openTask, panel.hidden);
+      return;
+    }
+
+    var instrClose = event.target.closest("[data-instructions-close]");
+    if (instrClose) {
+      setInstructionsOpen(instrClose.getAttribute("data-instructions-close"), false);
+      return;
+    }
+
     var hint = event.target.closest("[data-hint]");
     if (hint) {
-      var id = hint.getAttribute("data-hint");
-      var box = $('[data-hint-box="' + id + '"]');
-      var text = $('[data-hint-text="' + id + '"]');
-      if (!box || !text) return;
-      if (!box.hidden) {
-        box.hidden = true;
-        hint.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg> Show hint';
-        return;
-      }
-      if (text.textContent) {
-        box.hidden = false;
-        hint.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg> Hide hint';
-        return;
-      }
-      api("/api/hint", { question_id: id })
-        .then(function (data) {
-          text.textContent = data.hint || "No hint for this question.";
-          box.hidden = false;
-          hint.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg> Hide hint';
-        })
-        .catch(function () { toast("Could not load hint", "bad"); });
+      toggleHint(hint);
       return;
     }
 
@@ -250,6 +311,19 @@
       copyText(copyBtn.getAttribute("data-copy"))
         .then(function () { toast("Copied to clipboard", "ok"); })
         .catch(function () { toast("Copy failed - select it manually", "bad"); });
+    }
+  });
+
+  document.addEventListener("input", function (event) {
+    var input = event.target.closest("[data-input]");
+    if (!input) return;
+    var id = input.getAttribute("data-input");
+    var question = $('[data-question="' + id + '"]');
+    if (question) question.classList.remove("is-wrong");
+    var feedback = $('[data-feedback="' + id + '"]');
+    if (feedback && feedback.classList.contains("bad")) {
+      feedback.className = "question__feedback";
+      feedback.textContent = "";
     }
   });
 

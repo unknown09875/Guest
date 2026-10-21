@@ -92,9 +92,15 @@ A spoiler-filled answer key lives in [`SOLUTIONS.md`](SOLUTIONS.md).
 ## Using the portal
 
 - **Left column** - Task 1-6 list with per-task progress, clicking scrolls to the task.
-- **Task cards** - collapsible dropdowns; every question has an answer box, a
-  `Submit` button and a `Show hint` toggle. Correct answers turn the box green
-  with a tick, wrong ones shake and show a red message.
+- **Task cards** - each card opens straight on the questions so you can answer
+  immediately. The walkthrough for a task is **hidden by default**: use the
+  **Show instructions** button underneath the questions to reveal it (the choice
+  is remembered per task in your browser, and `Hide` closes it again).
+- **Questions** - every question has an answer box, a `Submit` button and a
+  `Show hint` toggle. Hints only appear when you click them and are fetched on
+  demand, so nothing is revealed automatically. Correct answers turn the box
+  green with a tick, wrong ones shake and show a red message that clears as soon
+  as you start typing again.
 - **Right column** - target `IP` box with copy button, a fake 60 minute timer,
   `+ Add 1 Hour` and `Terminate` buttons (UI only, they never touch Docker),
   the access command and a small cheat sheet.
@@ -102,6 +108,13 @@ A spoiler-filled answer key lives in [`SOLUTIONS.md`](SOLUTIONS.md).
   your submitted answers and flags for this browser.
 - **Progress bar** - updates live from the API. Each task shows `x/y` and a green
   tick when it is complete.
+
+### Instructions & hints
+
+Instructions never open on their own. Open **Show instructions** under the
+questions of a task when you want the walkthrough, and close it with **Hide**.
+Hints work the same way: the `Show hint` link loads one hint for that question
+and nothing else is revealed until you ask for it.
 
 The navbar/timer/streak/points elements are part of the theme, not real accounts.
 
@@ -302,8 +315,11 @@ docker compose down --rmi local --volumes --remove-orphans
   backticks removed). Alternative correct forms are accepted, e.g.
   `mv -- '- logs' newlogs`, `mv ./- logs newlogs`,
   and `cp -r "encryption keys" /home/john/logs`.
-- Hints are fetched on demand from `/api/hint`, so they are not embedded in the
-  initial HTML.
+- Hints and instructions are opt-in: hints are fetched on demand from
+  `/api/hint` and instruction blocks are hidden behind a per-task toggle, so the
+  initial page never spoils an answer.
+- `setup.sh` writes a random Flask session secret to `.env` (mode 600) the first
+  time it runs and reuses it afterwards. Delete `.env` to rotate the secret.
 - The UI is inspired by TryHackMe's dark room layout but uses its own "KaliLab"
   branding and no third-party assets. Fonts fall back to your system fonts.
 - Everything is vanilla HTML/CSS/JS - no build step, no CDN, works offline after
