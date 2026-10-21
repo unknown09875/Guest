@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ room.name }} | KaliLab</title>
+  <meta name="description" content="{{ room.description|striptags }}" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%239fef00'/%3E%3Cpath d='M9 10l7 6-7 6' stroke='%230b0f14' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M17 22h7' stroke='%230b0f14' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/thm.css') }}" />
+</head>
+<body>
+  <a class="skip-link" href="#room-content">Skip to room content</a>
+
+  <header class="topbar">
+    <div class="topbar__left">
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Toggle task navigation" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <a class="brand" href="/">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path d="M9 10l7 6-7 6" /><path d="M17 22h7" /></svg>
+        </span>
+        <span class="brand__text">Kali<span>Lab</span></span>
+      </a>
+      <nav class="topnav" aria-label="Main">
+        <a class="is-active" href="#">Rooms</a>
+        <a href="#">Challenges</a>
+        <a href="#">Learn</a>
+        <a href="#">Leaderboard</a>
+      </nav>
+    </div>
+
+    <div class="topbar__right">
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" placeholder="Search for a room..." aria-label="Search rooms" />
+      </label>
+      <div class="stat-chip" title="Daily streak">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4 5 5.5 5 9a5 5 0 11-10 0c0-2 1-3.5 2.5-5 0 2 .5 3 1.5 3.5C11.5 8 11 6 12 3z"/></svg>
+        <span>3</span>
+      </div>
+      <div class="stat-chip" title="Points">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.7 6.2.7-4.6 4.2 1.3 6.1L12 16.8 6.5 19.7l1.3-6.1L3.2 9.4l6.2-.7L12 3z"/></svg>
+        <span>0</span>
+      </div>
+      <div class="avatar" title="francis">F</div>
+    </div>
+  </header>
+
+  <div class="room-header">
+    <div class="room-header__inner">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="#">Rooms</a><span>/</span><a href="#">Easy</a><span>/</span><span class="crumbs__current">{{ room.name }}</span>
+      </nav>
+
+      <div class="room-title-row">
+        <div class="room-title-left">
+          <div class="room-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>
+          </div>
+          <div class="room-title-text">
+            <h1>{{ room.name }}</h1>
+            <p class="room-sub">
+              <span class="chip chip--difficulty">{{ room.difficulty }}</span>
+              {% for tag in room.tags %}<span class="chip">{{ tag }}</span>{% endfor %}
+              {% if solved_count == total_questions %}<span class="chip chip--done">&#10003; room completed</span>{% endif %}
+              <span class="room-author">Created by <strong>{{ room.author }}</strong></span>
+            </p>
+          </div>
+        </div>
+        <div class="room-title-actions">
+          <div class="room-progress">
+            <div class="room-progress__label">
+              <span>Your progress</span>
+              <strong id="progressText">{{ solved_count }} / {{ total_questions }}</strong>
+            </div>
+            <div class="bar" role="progressbar" aria-label="Room progress" aria-valuemin="0" aria-valuemax="{{ total_questions }}" aria-valuenow="{{ solved_count }}" id="progressBar">
+              <span id="progressFill" style="width:{{ ((solved_count / total_questions) * 100) if total_questions else 0 }}%"></span>
+            </div>
+          </div>
+          <button class="btn btn--ghost" id="resetProgress" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg>
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <p class="room-desc">{{ room.description|safe }}</p>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- ---------------------------------------------------------------- -->
+    <!-- Task list                                                         -->
+    <!-- ---------------------------------------------------------------- -->
+    <aside class="sidebar" id="taskNav" aria-label="Tasks">
+      <div class="card sidebar__card">
+        <div class="sidebar__head">
+          <h2>Tasks</h2>
+          <span class="pill" id="solvedPill">{{ solved_count }}/{{ total_questions }}</span>
+        </div>
+        <ol class="task-list">
+          {% for task in tasks %}
+            {% set task_total = task.questions|length %}
+            {% set ns = namespace(done=0) %}
+            {% for q in task.questions %}{% if q.id in solved %}{% set ns.done = ns.done + 1 %}{% endif %}{% endfor %}
+            <li>
+              <a class="task-list__item {% if loop.first %}is-active{% endif %}" href="#{{ task.id }}" data-task-link="{{ task.id }}">
+                <span class="task-list__num">{{ task.number }}</span>
+                <span class="task-list__body">
+                  <span class="task-list__title">{{ task.title }}</span>
+                  <span class="task-list__meta">{{ ns.done }}/{{ task_total }} answered</span>
+                </span>
+                {% if ns.done == task_total %}<span class="tick" aria-label="Task complete">✓</span>{% endif %}
+              </a>
+            </li>
+          {% endfor %}
+        </ol>
+
+        <div class="sidebar__foot">
+          <div class="flags-found">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4m0 0h11l-2 4 2 4H6"/></svg>
+            <span><strong id="flagsFound">{{ flags_found }}</strong>/{{ flag_slots|length }} flags captured</span>
+          </div>
+          <p class="sidebar__note">Answers unlock a green tick as soon as they are correct.</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ---------------------------------------------------------------- -->
+    <!-- Tasks                                                             -->
+    <!-- ---------------------------------------------------------------- -->
+    <main class="room-content" id="room-content">
+      <div class="callout callout--info">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+        <p>
+          This room runs entirely on your machine. Open a terminal on your Kali VM and use
+          <code>docker exec -it linux-target bash</code> for a root shell on the target.
+          Flags are validated live against the container &mdash; nothing is hard-coded in this page.
+        </p>
+      </div>
+
+      {% for task in tasks %}
+      <section class="card task" id="{{ task.id }}" data-task="{{ task.id }}">
+        <button class="task__head" type="button" aria-expanded="true" aria-controls="{{ task.id }}-body">
+          <span class="task__index">{{ task.number }}</span>
+          <span class="task__heading">
+            <span class="task__title">{{ task.title }}</span>
+            <span class="task__subtitle">{{ task.subtitle }}</span>
+          </span>
+          <span class="task__status" data-task-status="{{ task.id }}">
+            {% set ns = namespace(done=0) %}
+            {% for q in task.questions %}{% if q.id in solved %}{% set ns.done = ns.done + 1 %}{% endif %}{% endfor %}
+            {% if ns.done == task.questions|length %}<span class="pill pill--done">Completed</span>{% else %}{{ ns.done }}/{{ task.questions|length }}{% endif %}
+          </span>
+          <svg class="task__chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+
+        <div class="task__body" id="{{ task.id }}-body">
+          {% for block in task.blocks %}
+            {% if block.type == 'p' %}
+              <p>{{ block.html|safe }}</p>
+            {% elif block.type == 'code' %}
+              <div class="codeblock">
+                <div class="codeblock__bar">
+                  <span class="codeblock__lang">{{ block.lang|default('bash') }}</span>
+                  {% if block.spoiler %}<span class="codeblock__spoiler">spoiler - try it yourself first</span>{% endif %}
+                  <button class="copy-btn" type="button" data-copy-block>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>
+                    Copy
+                  </button>
+                </div>
+                <pre><code>{{ block.text }}</code></pre>
+              </div>
+            {% elif block.type == 'note' %}
+              <div class="callout callout--note">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg>
+                <div>
+                  {% if block.title %}<p class="callout__title">{{ block.title|safe }}</p>{% endif %}
+                  <p>{{ block.html|safe }}</p>
+                </div>
+              </div>
+            {% elif block.type == 'list' %}
+              <ul class="room-list">{% for item in block['items'] %}<li>{{ item|safe }}</li>{% endfor %}</ul>
+            {% endif %}
+          {% endfor %}
+
+          <div class="questions">
+            {% for q in task.questions %}
+            <div class="question {% if q.id in solved %}is-solved{% endif %}" data-question="{{ q.id }}">
+              <div class="question__prompt">
+                <span class="question__badge" aria-hidden="true">
+                  {% if q.validator == 'flag' %}
+                    <svg viewBox="0 0 24 24"><path d="M6 21V4m0 0h11l-2 4 2 4H6"/></svg>
+                  {% else %}
+                    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+                  {% endif %}
+                </span>
+                <p>{{ q.prompt|safe }}</p>
+              </div>
+
+              <div class="question__answer">
+                <label class="visually-hidden" for="input-{{ q.id }}">Answer for {{ task.title }}</label>
+                <div class="input-wrap">
+                  <input
+                    id="input-{{ q.id }}"
+                    class="answer-input {% if q.mono %}mono{% endif %}"
+                    type="text"
+                    name="answer"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="{{ q.placeholder }}"
+                    data-input="{{ q.id }}"
+                    {% if q.id in solved %}disabled value="{{ answers.get(q.id, '') }}"{% endif %}
+                  />
+                  <span class="input-check" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+                  </span>
+                </div>
+                <button class="btn btn--primary" type="button" data-submit="{{ q.id }}" {% if q.id in solved %}disabled{% endif %}>
+                  Submit
+                </button>
+              </div>
+
+              <div class="question__meta">
+                <button class="link-btn" type="button" data-hint="{{ q.id }}" {% if not q.hint %}hidden{% endif %}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9 21h6"/></svg>
+                  Show hint
+                </button>
+                <span class="question__feedback" data-feedback="{{ q.id }}" role="status" aria-live="polite"></span>
+              </div>
+
+              <div class="hint" data-hint-box="{{ q.id }}" hidden>
+                <span class="hint__icon" aria-hidden="true">!</span>
+                <p data-hint-text="{{ q.id }}"></p>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+      {% endfor %}
+
+      <!-- Room level flag submission -->
+      <section class="card submit-flag" id="submit-flag">
+        <div class="submit-flag__head">
+          <span class="submit-flag__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M6 21V4m0 0h11l-2 4 2 4H6"/></svg>
+          </span>
+          <div>
+            <h2>Submit Flag</h2>
+            <p>Found a flag? Drop it here &mdash; it is verified against the live target container.</p>
+          </div>
+        </div>
+        <form class="submit-flag__form" id="flagForm" autocomplete="off">
+          <div class="input-wrap">
+            <input id="flagInput" class="answer-input mono" type="text" placeholder="FLAG{...}" spellcheck="false" autocapitalize="off" aria-label="Flag" />
+            <span class="input-check" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></span>
+          </div>
+          <button class="btn btn--primary" type="submit">Submit Flag</button>
+        </form>
+        <p class="submit-flag__feedback" id="flagFeedback" role="status" aria-live="polite"></p>
+        <div class="flag-slots">
+          {% for slot in flag_slots %}
+            <div class="flag-slot {% if slot.key in captured_flags %}is-captured{% endif %}" data-flag-slot="{{ slot.key }}">
+              <span class="flag-slot__dot"></span>
+              <span>{{ slot.label }}</span>
+              <span class="flag-slot__state">{% if slot.key in captured_flags %}captured{% else %}not captured{% endif %}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <footer class="room-footer">
+        <span>Kali Fundamentals Lab &middot; built for eJPT v2 revision</span>
+        <button class="link-btn" type="button" id="resetProgressBottom">Reset my answers</button>
+      </footer>
+    </main>
+
+    <!-- ---------------------------------------------------------------- -->
+    <!-- Target machine panel                                              -->
+    <!-- ---------------------------------------------------------------- -->
+    <aside class="machine-col" aria-label="Target machine">
+      <div class="card machine">
+        <div class="machine__head">
+          <h2>Target Machine</h2>
+          <span class="status-dot" id="targetStatus" title="Checking target..."><span></span>checking</span>
+        </div>
+
+        <div class="machine__ip">
+          <span class="machine__label">Target IP</span>
+          <div class="ip-box">
+            <code id="targetIp">{{ target_ip }}</code>
+            <button class="icon-btn" type="button" data-copy="{{ target_ip }}" aria-label="Copy target IP">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="machine__timer">
+          <span class="machine__label">Time remaining</span>
+          <div class="timer" id="timer" aria-live="off">60:00</div>
+          <div class="machine__actions">
+            <button class="btn btn--small" type="button" id="addHour">+ Add 1 Hour</button>
+            <button class="btn btn--small btn--danger" type="button" id="terminate">Terminate</button>
+          </div>
+          <p class="machine__hint">UI only &mdash; this lab has no real expiry timer.</p>
+        </div>
+
+        <div class="machine__access">
+          <span class="machine__label">Access</span>
+          <div class="codeblock codeblock--compact">
+            <div class="codeblock__bar">
+              <span class="codeblock__lang">shell</span>
+              <button class="copy-btn" type="button" data-copy-block>
+                <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>
+                Copy
+              </button>
+            </div>
+            <pre><code>{{ access }}</code></pre>
+          </div>
+          <p class="machine__hint">No SSH or VPN needed: the portal talks to Docker directly.</p>
+        </div>
+
+        <ul class="machine__facts">
+          <li><span>OS</span><strong>Ubuntu 22.04</strong></li>
+          <li><span>Container</span><strong>linux-target</strong></li>
+          <li><span>Users</span><strong>james, john, francis</strong></li>
+          <li><span>Flags</span><strong id="machineFlags">{{ flags_found }} / {{ flag_slots|length }}</strong></li>
+        </ul>
+
+        <a class="btn btn--block" href="#submit-flag">Submit a flag</a>
+      </div>
+
+      <div class="card quickhelp">
+        <h2>Cheat sheet</h2>
+        <dl>
+          <dt>Read a file</dt><dd><code>cat /path/file</code></dd>
+          <dt>Find by name</dt><dd><code>find / -name readable.txt 2&gt;/dev/null</code></dd>
+          <dt>Newer than date</dt><dd><code>find / -newermt 2024-01-01</code></dd>
+          <dt>Deploy again</dt><dd><code>./setup.sh</code></dd>
+        </dl>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    window.LAB = {
+      solved: {{ solved|list|tojson }},
+      total: {{ total_questions }},
+      flagsTotal: {{ flag_slots|length }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

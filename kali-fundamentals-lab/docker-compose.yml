@@ -1,0 +1,63 @@
+version: "3.8"
+
+# Kali Fundamentals Lab
+# ---------------------------------------------------------------------------
+# flask-portal : Flask instruction page on http://localhost:5000
+# linux-target : Ubuntu 22.04 victim box (10.10.10.5 inside the lab network)
+#
+# The portal reads the flags straight out of linux-target through the Docker
+# socket, so the flag values never live in the web app or in this file.
+# ---------------------------------------------------------------------------
+
+services:
+  flask-portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    image: kali-fundamentals-lab/portal:latest
+    container_name: flask-portal
+    hostname: flask-portal
+    restart: unless-stopped
+    ports:
+      - "${PORTAL_PORT:-5000}:5000"
+    environment:
+      SECRET_KEY: "${PORTAL_SECRET_KEY:-kali-fundamentals-lab-please-change-me}"
+      LAB_TARGET_CONTAINER: "linux-target"
+      LAB_TARGET_IP: "10.10.10.5"
+      LAB_TARGET_USER: "root"
+      DOCKER_SOCK: "/var/run/docker.sock"
+      FLAG_CACHE_TTL: "2"
+    volumes:
+      # Read-only enough to call docker exec; required so the portal can verify
+      # flags against the live target container.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - linux-target
+    networks:
+      lab-net:
+        ipv4_address: 10.10.10.2
+
+  linux-target:
+    build:
+      context: ./target
+      dockerfile: Dockerfile
+    image: kali-fundamentals-lab/linux-target:latest
+    container_name: linux-target
+    hostname: linux-target
+    restart: unless-stopped
+    # No SSH/VPN needed: access is `docker exec -it linux-target bash`.
+    networks:
+      lab-net:
+        ipv4_address: 10.10.10.5
+    labels:
+      - "lab=kali-fundamentals"
+      - "role=victim"
+
+networks:
+  lab-net:
+    name: kali-lab-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.10.0/24
+          gateway: 10.10.10.1
